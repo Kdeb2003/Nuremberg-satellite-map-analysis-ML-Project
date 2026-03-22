@@ -56,11 +56,16 @@ df_2021_clean = fix_labels(df_2021_clean)
 
 def simplify_labels(df):
     def map_class(x):
-        if x in [10, 20, 30]: return 0
-        elif x in [40, 50]: return 1
-        elif x in [60, 70]: return 2
-        elif x in [80, 90]: return 3
-        else: return 4
+        # Unified 4-class mapping aligned with dashboard:
+        # 0=Vegetation, 1=Built-up, 2=Water, 3=Other
+        if x in [10, 20, 30, 40]:
+            return 0
+        elif x == 50:
+            return 1
+        elif x == 80:
+            return 2
+        else:
+            return 3
     df["label"] = df["label"].apply(map_class)
     return df
 

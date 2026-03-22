@@ -55,7 +55,6 @@ Map.addLayer(ndwi, {min:-1,max:1,palette:['brown','white','blue']}, "NDWI");
 
 // ===============================
 // 4. LOAD LAND COVER LABELS
-//    (CORINE 2018)
 // ===============================
 
 var esa = ee.Image("ESA/WorldCover/v200/2021")
