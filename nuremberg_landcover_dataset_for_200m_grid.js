@@ -16,7 +16,7 @@ Map.addLayer(nuremberg, {color: 'red'}, "Nuremberg Boundary");
 
 var s2 = ee.ImageCollection("COPERNICUS/S2_SR")
   .filterBounds(nuremberg)
-  .filterDate('2022-01-01', '2022-12-31')   // change year when needed
+  .filterDate('2021-01-01', '2021-12-31')
   .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', 20))
   .select(['B2','B3','B4','B8','B11'])
   .median()
@@ -30,7 +30,7 @@ var vis = {
   max: 3000
 };
 
-Map.addLayer(s2, vis, "Sentinel-2");
+Map.addLayer(s2, vis, "Sentinel-2 2018");
 
 
 // ===============================
@@ -47,32 +47,35 @@ var ndbi = s2.normalizedDifference(['B11','B8']).rename('NDBI');
 var ndwi = s2.normalizedDifference(['B3','B8']).rename('NDWI');
 
 
-// Visualizations
+// Visualization
 Map.addLayer(ndvi, {min:-1,max:1,palette:['blue','white','green']}, "NDVI");
 Map.addLayer(ndbi, {min:-1,max:1,palette:['green','white','red']}, "NDBI");
 Map.addLayer(ndwi, {min:-1,max:1,palette:['brown','white','blue']}, "NDWI");
 
 
 // ===============================
-// 4. LOAD LAND-COVER LABELS
+// 4. LOAD LAND COVER LABELS
+//    (CORINE 2018)
 // ===============================
 
-var worldcover = ee.Image("ESA/WorldCover/v200/2021")
-                    .select('Map')
-                    .clip(nuremberg);
-                    
+var esa = ee.Image("ESA/WorldCover/v200/2021")
+            .select('Map')
+            .clip(nuremberg);
+
 // Visualization
-var worldcoverVis = {
-  min: 10,
-  max: 100,
+var corineVis = {
+  min: 1,
+  max: 44,
   palette: [
-    '006400','ffbb22','ffff4c','f096ff',
-    'fa0000','b4b4b4','f0f0f0','0064c8',
-    '0096a0','00cf75','fae6a0'
+    'e6004d','ff0000','ff4d4d','ff9999',
+    'ffffa8','ffff00','e6e600','999900',
+    'ccffcc','a6e64d','4dff00','00ff00',
+    '00a600','4dff4d','b3ffb3','d1ffd1',
+    'a6e6ff','4da6ff','0064ff','0040ff'
   ]
 };
 
-Map.addLayer(worldcover, worldcoverVis, "ESA WorldCover");
+Map.addLayer(esa, {}, "ESA WorldCover 2021");
 
 
 // ===============================
@@ -86,7 +89,7 @@ var features = s2
 
 
 // Combine features + labels
-var dataset = features.addBands(worldcover.rename('label'));
+var dataset = features.addBands(esa.rename('label'));
 
 
 // ===============================
@@ -140,7 +143,7 @@ var cleanData = gridStats.select([
   'NDBI_mean',
   'NDWI_mean',
   'label_mode'
-],[
+],[ 
   'B2',
   'B3',
   'B4',
@@ -153,7 +156,7 @@ var cleanData = gridStats.select([
 ]);
 
 
-// preview
+// Preview
 print("First 10 grid cells", cleanData.limit(10));
 
 
@@ -163,6 +166,6 @@ print("First 10 grid cells", cleanData.limit(10));
 
 Export.table.toDrive({
   collection: cleanData,
-  description: 'nuremberg_grid_dataset_2022_200m',
+  description: 'nuremberg_grid_dataset_2021_ESA_200m',
   fileFormat: 'CSV'
 });
