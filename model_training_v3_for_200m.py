@@ -193,11 +193,14 @@ print(importance.sort_values(ascending=False))
 # TEST PREDICTIONS (2024)
 # -----------------------------
 
-test_predictions = rf.predict(X_test_imputed)
+# Logistic Regression predictions
+test_df["pred_lr"] = y_test_pred_logreg
 
-test_df["predicted_label"] = test_predictions
+# Random Forest predictions
+test_df["pred_rf"] = rf.predict(X_test_imputed)
 
-print("\nTest Accuracy:", accuracy_score(y_test, test_predictions))
+print("\nLogistic Test Accuracy:", accuracy_score(y_test, test_df["pred_lr"]))
+print("Random Forest Test Accuracy:", accuracy_score(y_test, test_df["pred_rf"]))
 
 
 # -----------------------------
@@ -206,7 +209,7 @@ print("\nTest Accuracy:", accuracy_score(y_test, test_predictions))
 
 test_df.to_csv("predicted_landcover_2024_200m.csv", index=False)
 
-print("\nSaved predictions to predicted_landcover_2024_200m.csv")
+print("\nSaved predictions (LR + RF) to predicted_landcover_2024_200m.csv")
 
 
 # -----------------------------

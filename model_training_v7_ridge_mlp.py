@@ -1,278 +1,220 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 
+from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from sklearn.linear_model import RidgeClassifier
 from sklearn.impute import SimpleImputer
-from sklearn.metrics import (
-    accuracy_score,
-    confusion_matrix,
-    classification_report,
-    ConfusionMatrixDisplay,
-)
-from sklearn.decomposition import PCA
+from sklearn.metrics import accuracy_score
 from sklearn.neural_network import MLPClassifier
-
-from imblearn.over_sampling import RandomOverSampler
-
+from imblearn.over_sampling import SMOTE
 
 # =====================================================
-# 1. LOAD CLEAN DATASETS
+# 1. LOAD DATA
 # =====================================================
 
-df_2018 = pd.read_csv("clean_dataset_200m/2018_clean.csv")
-df_2020 = pd.read_csv("clean_dataset_200m/2020_clean.csv")
-df_2022 = pd.read_csv("clean_dataset_200m/2022_clean.csv")
-df_2024 = pd.read_csv("clean_dataset_200m/2024_clean.csv")
+df_2020 = pd.read_excel("nuremberg_grid_dataset_2020_200m.xlsx")
+df_2021 = pd.read_excel("nuremberg_grid_dataset_2021_ESA_200m.xlsx")
+df_2024 = pd.read_excel("nuremberg_2024_features_clean.xlsx")
 
-df_2018["year"] = 2018
 df_2020["year"] = 2020
-df_2022["year"] = 2022
+df_2021["year"] = 2021
 df_2024["year"] = 2024
 
-# Combine yearly datasets
-df = pd.concat([df_2018, df_2020, df_2022, df_2024], ignore_index=True)
-
-print("Dataset shape:", df.shape)
-print(df.head())
-
+print("Loaded shapes:")
+print(df_2020.shape, df_2021.shape, df_2024.shape)
 
 # =====================================================
 # 2. CLEAN DATA
 # =====================================================
 
-# Drop columns not used for modeling
-df = df.drop(columns=["system:index", ".geo"], errors="ignore")
+def clean_df(df):
+    df = df.dropna(subset=["label"])
+    df = df.reset_index(drop=True)
+    return df
 
-# Remove rows without labels
-df = df.dropna(subset=["label"])
+df_2020_clean = clean_df(df_2020.copy())
+df_2021_clean = clean_df(df_2021.copy())
 
-print("\nOverall label distribution:")
-print(df["label"].value_counts())
-
-print("\nClass distribution by year:")
-print(df.groupby("year")["label"].value_counts().unstack(fill_value=0))
-
+# 2024 → no labels
+df_2024_clean = df_2024.drop(columns=["system:index"], errors="ignore")
 
 # =====================================================
-# 3. FEATURE ENGINEERING
+# 3. FIX LABELS
 # =====================================================
 
-# Extra remote sensing indices
-df["SAVI"] = ((df["B8"] - df["B4"]) / (df["B8"] + df["B4"] + 0.5)) * 1.5
-df["BSI"] = ((df["B11"] + df["B4"]) - (df["B8"] + df["B2"])) / (
-    (df["B11"] + df["B4"]) + (df["B8"] + df["B2"])
-)
-df["UI"] = (df["B11"] - df["B8"]) / (df["B11"] + df["B8"])
+def fix_labels(df):
+    df["label"] = df["label"].round().astype(int)
+    return df
 
-
-# =====================================================
-# 4. TRAIN / VALIDATION / TEST SPLIT
-# =====================================================
-
-train_df = df[df["year"].isin([2018, 2020])].copy()
-val_df = df[df["year"] == 2022].copy()
-test_df = df[df["year"] == 2024].copy()
-
-print("\nTrain size:", train_df.shape)
-print("Validation size:", val_df.shape)
-print("Test size:", test_df.shape)
-
+df_2020_clean = fix_labels(df_2020_clean)
+df_2021_clean = fix_labels(df_2021_clean)
 
 # =====================================================
-# 5. FEATURE LIST
+# 4. SIMPLIFY LABELS
+# =====================================================
+
+def simplify_labels(df):
+    def map_class(x):
+        if x in [10, 20, 30]: return 0
+        elif x in [40, 50]: return 1
+        elif x in [60, 70]: return 2
+        elif x in [80, 90]: return 3
+        else: return 4
+    df["label"] = df["label"].apply(map_class)
+    return df
+
+df_2020_clean = simplify_labels(df_2020_clean)
+df_2021_clean = simplify_labels(df_2021_clean)
+
+# =====================================================
+# 5. FEATURE ENGINEERING
+# =====================================================
+
+def add_features(df):
+    df["SAVI"] = ((df["B8"] - df["B4"]) / (df["B8"] + df["B4"] + 0.5)) * 1.5
+    df["BSI"] = ((df["B11"] + df["B4"]) - (df["B8"] + df["B2"])) / (
+        (df["B11"] + df["B4"]) + (df["B8"] + df["B2"])
+    )
+    df["UI"] = (df["B11"] - df["B8"]) / (df["B11"] + df["B8"])
+    return df
+
+df_2020_clean = add_features(df_2020_clean)
+df_2021_clean = add_features(df_2021_clean)
+df_2024_clean = add_features(df_2024_clean)
+
+# =====================================================
+# 6. FEATURES
 # =====================================================
 
 features = [
-    "B11",
-    "B2",
-    "B3",
-    "B4",
-    "B8",
-    "NDBI",
-    "NDVI",
-    "NDWI",
-    "SAVI",
-    "BSI",
-    "UI",
+    "B11", "B2", "B3", "B4", "B8",
+    "NDVI", "NDBI", "NDWI",
+    "SAVI", "BSI", "UI"
 ]
 
-X_train = train_df[features]
-y_train = train_df["label"]
-
-X_val = val_df[features]
-y_val = val_df["label"]
-
-X_test = test_df[features]
-y_test = test_df["label"]
-
-
 # =====================================================
-# 6. HANDLE CLASS IMBALANCE
+# 7. TRAIN / VALID / TEST SPLIT (2020)
 # =====================================================
 
-ros = RandomOverSampler(random_state=42)
-X_train_resampled, y_train_resampled = ros.fit_resample(X_train, y_train)
+X = df_2020_clean[features]
+y = df_2020_clean["label"]
 
-print("\nBalanced training distribution:")
-print(pd.Series(y_train_resampled).value_counts())
+# 80% train, 20% temp
+X_train, X_temp, y_train, y_temp = train_test_split(
+    X, y, test_size=0.2, stratify=y, random_state=42
+)
 
+# Split temp → 10% val, 10% test
+X_val, X_test_internal, y_val, y_test_internal = train_test_split(
+    X_temp, y_temp, test_size=0.5, stratify=y_temp, random_state=42
+)
 
 # =====================================================
-# 7. IMPUTE MISSING VALUES
+# 8. TEST (2021)
+# =====================================================
+
+X_test_2021 = df_2021_clean[features]
+y_test_2021 = df_2021_clean["label"]
+
+# =====================================================
+# 9. FUTURE (2024)
+# =====================================================
+
+X_2024 = df_2024_clean[features]
+
+# =====================================================
+# 10. PREPROCESSING
 # =====================================================
 
 imputer = SimpleImputer(strategy="mean")
-
-X_train_imputed = imputer.fit_transform(X_train_resampled)
-X_val_imputed = imputer.transform(X_val)
-X_test_imputed = imputer.transform(X_test)
-
-
-# =====================================================
-# 8. SCALE FEATURES
-# =====================================================
-
 scaler = StandardScaler()
 
-X_train_scaled = scaler.fit_transform(X_train_imputed)
-X_val_scaled = scaler.transform(X_val_imputed)
-X_test_scaled = scaler.transform(X_test_imputed)
+X_train = imputer.fit_transform(X_train)
+X_val = imputer.transform(X_val)
+X_test_internal = imputer.transform(X_test_internal)
+X_test_2021 = imputer.transform(X_test_2021)
+X_2024 = imputer.transform(X_2024)
 
-
-# =====================================================
-# 9. MODEL 1 — RIDGE CLASSIFIER
-# =====================================================
-
-print("\nTraining Ridge Classifier...")
-
-ridge = RidgeClassifier(alpha=1.0)
-ridge.fit(X_train_scaled, y_train_resampled)
-
-# Validation
-y_val_pred_ridge = ridge.predict(X_val_scaled)
-
-print("\nRidge Validation Accuracy:", accuracy_score(y_val, y_val_pred_ridge))
-print(confusion_matrix(y_val, y_val_pred_ridge))
-print(classification_report(y_val, y_val_pred_ridge, zero_division=0))
-
-# Test
-y_test_pred_ridge = ridge.predict(X_test_scaled)
-
-print("\nRidge Test Accuracy:", accuracy_score(y_test, y_test_pred_ridge))
-print(confusion_matrix(y_test, y_test_pred_ridge))
-print(classification_report(y_test, y_test_pred_ridge, zero_division=0))
-
-# Save Ridge predictions
-test_df_ridge = test_df.copy()
-test_df_ridge["predicted_label"] = y_test_pred_ridge
-test_df_ridge.to_csv("predicted_landcover_ridge.csv", index=False)
-
-print("\nSaved Ridge predictions to predicted_landcover_2024_200m_ridge.csv")
-
+X_train = scaler.fit_transform(X_train)
+X_val = scaler.transform(X_val)
+X_test_internal = scaler.transform(X_test_internal)
+X_test_2021 = scaler.transform(X_test_2021)
+X_2024 = scaler.transform(X_2024)
 
 # =====================================================
-# 10. MODEL 2 — MLP CLASSIFIER (NONLINEAR MODEL)
+# 11. SMOTE
 # =====================================================
 
-print("\nTraining MLP Classifier...")
-
-mlp = MLPClassifier(
-    hidden_layer_sizes=(64, 32),
-    activation="relu",
-    solver="adam",
-    alpha=0.0001,
-    learning_rate_init=0.001,
-    max_iter=300,
-    random_state=42,
-    early_stopping=True,
-    validation_fraction=0.1,
-)
-
-mlp.fit(X_train_scaled, y_train_resampled)
-
-# Validation
-y_val_pred_mlp = mlp.predict(X_val_scaled)
-
-print("\nMLP Validation Accuracy:", accuracy_score(y_val, y_val_pred_mlp))
-print(confusion_matrix(y_val, y_val_pred_mlp))
-print(classification_report(y_val, y_val_pred_mlp, zero_division=0))
-
-# Test
-y_test_pred_mlp = mlp.predict(X_test_scaled)
-
-print("\nMLP Test Accuracy:", accuracy_score(y_test, y_test_pred_mlp))
-print(confusion_matrix(y_test, y_test_pred_mlp))
-print(classification_report(y_test, y_test_pred_mlp, zero_division=0))
-
-# Save MLP predictions
-test_df_mlp = test_df.copy()
-test_df_mlp["predicted_label"] = y_test_pred_mlp
-test_df_mlp.to_csv("predicted_landcover_mlp.csv", index=False)
-
-print("\nSaved MLP predictions to predicted_landcover_2024_200m_mlp.csv")
-
+smote = SMOTE(random_state=42)
+X_train, y_train = smote.fit_resample(X_train, y_train)
 
 # =====================================================
-# 11. VISUALIZATIONS
+# 12. MODELS
 # =====================================================
 
-fig, axes = plt.subplots(2, 2, figsize=(14, 10))
+ridge = RidgeClassifier()
+ridge.fit(X_train, y_train)
 
-# -----------------------------
-# PCA plot
-# -----------------------------
-pca = PCA(n_components=2)
-X_pca = pca.fit_transform(X_train_scaled)
+mlp = MLPClassifier(hidden_layer_sizes=(96, 48), max_iter=500, random_state=42)
+mlp.fit(X_train, y_train)
 
-scatter = axes[0, 0].scatter(
-    X_pca[:, 0], X_pca[:, 1], c=y_train_resampled, cmap="tab10", s=5
-)
-axes[0, 0].set_title("PCA Visualization of Training Data")
-axes[0, 0].set_xlabel("PC1")
-axes[0, 0].set_ylabel("PC2")
+# =====================================================
+# 13. EVALUATION
+# =====================================================
 
-# -----------------------------
-# Actual vs Predicted (MLP)
-# -----------------------------
-actual_counts = pd.Series(y_test).value_counts().sort_index()
-pred_counts_mlp = pd.Series(y_test_pred_mlp).value_counts().sort_index()
+print("\nValidation:")
+print("Ridge:", accuracy_score(y_val, ridge.predict(X_val)))
+print("MLP  :", accuracy_score(y_val, mlp.predict(X_val)))
 
-df_compare = pd.DataFrame(
-    {"Actual": actual_counts, "Predicted (MLP)": pred_counts_mlp}
-).fillna(0)
+print("\nInternal Test (2020 split):")
+print("Ridge:", accuracy_score(y_test_internal, ridge.predict(X_test_internal)))
+print("MLP  :", accuracy_score(y_test_internal, mlp.predict(X_test_internal)))
 
-df_compare.plot(kind="bar", ax=axes[0, 1])
-axes[0, 1].set_title("Actual vs Predicted Class Distribution (MLP)")
-axes[0, 1].set_ylabel("Number of Cells")
-axes[0, 1].tick_params(axis="x", rotation=0)
+print("\nTest (2021):")
+print("Ridge:", accuracy_score(y_test_2021, ridge.predict(X_test_2021)))
+print("MLP  :", accuracy_score(y_test_2021, mlp.predict(X_test_2021)))
 
-# -----------------------------
-# Ridge confusion matrix
-# -----------------------------
-cm_ridge = confusion_matrix(y_test, y_test_pred_ridge)
-disp_ridge = ConfusionMatrixDisplay(confusion_matrix=cm_ridge)
-disp_ridge.plot(ax=axes[1, 0], colorbar=False)
-axes[1, 0].set_title("Confusion Matrix - Ridge")
+# =====================================================
+# SAVE 2021 PREDICTIONS (ALIGNED OUTPUT)
+# =====================================================
 
-# -----------------------------
-# MLP confusion matrix
-# -----------------------------
-cm_mlp = confusion_matrix(y_test, y_test_pred_mlp)
-disp_mlp = ConfusionMatrixDisplay(confusion_matrix=cm_mlp)
-disp_mlp.plot(ax=axes[1, 1], colorbar=False)
-axes[1, 1].set_title("Confusion Matrix - MLP")
+df_2021_output = df_2021_clean.copy().reset_index(drop=True)
+df_2021_output["mlp_pred"] = mlp.predict(X_test_2021)
+df_2021_output["ridge_pred"] = ridge.predict(X_test_2021)
 
-plt.tight_layout()
+# Safety checks to prevent silent misalignment
+assert len(df_2021_output["label"]) == len(df_2021_output["mlp_pred"]), "Mismatch in prediction length"
+assert df_2021_output["label"].notna().all(), "Missing labels detected"
+assert pd.Series(df_2021_output["mlp_pred"]).notna().all(), "Missing MLP predictions detected"
+assert pd.Series(df_2021_output["ridge_pred"]).notna().all(), "Missing Ridge predictions detected"
+
+# Optional debug check
+print("2021 output shape:", df_2021_output.shape)
+print(df_2021_output[["label", "mlp_pred", "ridge_pred"]].head())
+
+df_2021_output.to_csv("predictions_2021.csv", index=False)
+
+print("Saved predictions_2021.csv")
+
+# =====================================================
+# SAVE 2024 PREDICTIONS (FIXED)
+# =====================================================
+
+df_2024_output = df_2024.copy()
+
+df_2024_output["mlp_pred"] = mlp.predict(X_2024)
+df_2024_output["ridge_pred"] = ridge.predict(X_2024)
+
+df_2024_output.to_csv("predictions_2024.csv", index=False)
+
+print("Saved predictions_2024.csv")
+
+# =====================================================
+# 16. OPTIONAL PLOT
+# =====================================================
+
+plt.figure(figsize=(8,5))
+pd.Series(df_2024_output["mlp_pred"]).value_counts().sort_index().plot(kind="bar")
+plt.title("Predicted Land Cover (2024 - MLP)")
 plt.show()
-
-# =====================================================
-# 12. FINAL SUMMARY
-# =====================================================
-
-print("\n================ FINAL SUMMARY ================")
-print("Ridge Validation Accuracy :", accuracy_score(y_val, y_val_pred_ridge))
-print("Ridge Test Accuracy       :", accuracy_score(y_test, y_test_pred_ridge))
-print("MLP Validation Accuracy   :", accuracy_score(y_val, y_val_pred_mlp))
-print("MLP Test Accuracy         :", accuracy_score(y_test, y_test_pred_mlp))
-print("==============================================")
