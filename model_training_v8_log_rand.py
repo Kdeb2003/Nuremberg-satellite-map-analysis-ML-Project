@@ -198,9 +198,9 @@ assert pd.Series(df_2021_output["rf_pred"]).notna().all(), "Missing Random Fores
 print("2021 output shape:", df_2021_output.shape)
 print(df_2021_output[["label", "logreg_pred", "rf_pred"]].head())
 
-df_2021_output.to_csv("predictions_2021.csv", index=False)
+df_2021_output.to_csv("predictions_2021_v8.csv", index=False)
 
-print("Saved predictions_2021.csv")
+print("Saved predictions_2021_v8.csv")
 
 # =====================================================
 # SAVE 2024 PREDICTIONS
@@ -211,9 +211,9 @@ df_2024_output = df_2024.copy()
 df_2024_output["logreg_pred"] = logreg.predict(X_2024)
 df_2024_output["rf_pred"] = rf.predict(X_2024)
 
-df_2024_output.to_csv("predictions_2024.csv", index=False)
+df_2024_output.to_csv("predictions_2024_v8.csv", index=False)
 
-print("Saved predictions_2024.csv")
+print("Saved predictions_2024_v8.csv")
 
 # =====================================================
 # 16. OPTIONAL PLOT
