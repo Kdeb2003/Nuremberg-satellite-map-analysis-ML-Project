@@ -16,11 +16,92 @@ st.set_page_config(
     page_title="Nuremberg Land Cover Dashboard",
     layout="wide"
 )
+# -----------------------------
+# DARK GRADIENT THEME (PINK / BLUE)
+# -----------------------------
+st.markdown("""
+<style>
 
+/* Main background */
+.stApp {
+    background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+    color: #e6e6f0;
+}
+
+/* Sidebar */
+section[data-testid="stSidebar"] {
+    background: linear-gradient(180deg, #1a1a2e, #16213e);
+    border-right: 1px solid rgba(255,255,255,0.05);
+}
+
+/* Headers */
+h1, h2, h3, h4 {
+    color: #ff4da6; /* neon pink */
+    font-weight: 700;
+}
+
+/* Cards / containers */
+div[data-testid="stMetric"],
+div[data-testid="stPlotlyChart"],
+div[data-testid="stDataFrame"],
+div[data-testid="stVerticalBlock"] > div {
+    background: rgba(20, 20, 40, 0.6);
+    border-radius: 14px;
+    padding: 12px;
+    backdrop-filter: blur(12px);
+    box-shadow: 0 0 25px rgba(255, 77, 166, 0.08);
+    border: 1px solid rgba(255,255,255,0.05);
+}
+
+/* Buttons */
+button[kind="primary"] {
+    background: linear-gradient(90deg, #ff4da6, #4da6ff);
+    border: none;
+    border-radius: 10px;
+    color: white;
+    font-weight: 600;
+}
+
+/* Inputs */
+input, textarea, .stSelectbox, .stMultiSelect {
+    background: rgba(255,255,255,0.08) !important;
+    color: white !important;
+    border-radius: 8px !important;
+}
+
+/* Metrics */
+[data-testid="stMetricValue"] {
+    color: #66b3ff;
+    font-weight: bold;
+}
+
+/* Chat */
+.stChatMessage {
+    background: rgba(255,255,255,0.08);
+    border-radius: 12px;
+    padding: 8px;
+}
+
+/* Text tweaks */
+p, label, span {
+    color: #dcdcf0 !important;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+    width: 8px;
+}
+::-webkit-scrollbar-thumb {
+    background: linear-gradient(#ff4da6, #4da6ff);
+    border-radius: 10px;
+}
+
+</style>
+""", unsafe_allow_html=True)
 st.title("Mapping Urban Change in Nuremberg")
 st.write("Interactive dashboard for exploring land cover and urban change using machine learning.")
 
-st.sidebar.title("Controls")
+st.sidebar.title("Land Cover Dashboard ")
 view_mode = st.sidebar.radio(
     "View Mode",
     options=["Single Year", "Multiple Years"],
