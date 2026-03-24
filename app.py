@@ -32,7 +32,8 @@ plt.rcParams.update({
 # -----------------------------
 st.set_page_config(
     page_title="Nuremberg Land Cover Dashboard",
-    layout="wide"
+    layout="wide",
+    initial_sidebar_state="expanded",
 )
 
 # -----------------------------
@@ -62,6 +63,18 @@ div[data-testid="stDecoration"] {
 section[data-testid="stSidebar"] {
     background: linear-gradient(180deg, #1a1a2e, #16213e);
     border-right: 1px solid rgba(80, 80, 140, 0.45);
+    min-width: 320px !important;
+    max-width: 320px !important;
+    transform: translateX(0) !important;
+    margin-left: 0 !important;
+}
+
+/* Force sidebar visible even if collapsed state was saved in browser */
+section[data-testid="stSidebar"][aria-expanded="false"] {
+    min-width: 320px !important;
+    max-width: 320px !important;
+    transform: translateX(0) !important;
+    margin-left: 0 !important;
 }
 
 /* Sidebar text visibility */
@@ -1825,8 +1838,9 @@ else:
     model_col = "mlp_pred" if selected_model == "MLP" else "ridge_pred"
 
     # Primary comparison pair (year1 -> year2)
-    label_col_year1 = "label" if first_year in ["2020", "2021"] else model_col
-    label_col_year2 = "label" if second_year in ["2020", "2021"] else model_col
+    # Use actual labels for 2020 and selected-model predictions for later years.
+    label_col_year1 = "label" if first_year == "2020" else model_col
+    label_col_year2 = "label" if second_year == "2020" else model_col
 
     st.markdown("### Maps")
     years_set = {first_year, second_year}
@@ -1925,11 +1939,16 @@ else:
         "**Change Map Legend:** Red = Vegetation→Built-up, Green = Built-up→Vegetation, "
         "Blue = Water-related change, Yellow = Other change, Gray = No change"
     )
-    st.markdown("#### Actual Trend Summary")
+    trend_heading = (
+        "#### Actual Trend Summary"
+        if (label_col_year1 == "label" and label_col_year2 == "label")
+        else "#### Trend Summary (Using Selected Model Predictions)"
+    )
+    st.markdown(trend_heading)
     render_builtup_growth_metric(df_year1, df_year2, first_year, second_year, label_col_year1, label_col_year2)
     render_net_change_summary(df_year1, df_year2, first_year, second_year, label_col_year1, label_col_year2)
 
-    if years_set == {"2020", "2021"}:
+    if years_set == {"2020", "2021"} and label_col_year2 == "label":
         st.markdown("#### Predicted Trend Summary (2020 -> 2021)")
         render_builtup_growth_metric(df_2020, df_2021, "2020", "2021 Predicted", "label", model_col)
         render_net_change_summary(df_2020, df_2021, "2020", "2021 Predicted", "label", model_col)
@@ -2131,8 +2150,8 @@ else:
     model_col_for_multi = "mlp_pred" if selected_model == "MLP" else "ridge_pred"
     df_year1 = year_to_df[first_year]
     df_year2 = year_to_df[second_year]
-    label_col_year1 = "label" if first_year in ["2020", "2021"] else model_col_for_multi
-    label_col_year2 = "label" if second_year in ["2020", "2021"] else model_col_for_multi
+    label_col_year1 = "label" if first_year == "2020" else model_col_for_multi
+    label_col_year2 = "label" if second_year == "2020" else model_col_for_multi
     c1 = _counts_for_chat(df_year1, label_col_year1)
     c2 = _counts_for_chat(df_year2, label_col_year2)
     net_change = {k: int(c2[k] - c1[k]) for k in [0, 1, 2, 3]}
