@@ -177,7 +177,7 @@ They include:
 - Add automated tests for critical data-loading paths
 - Add model performance summary table (all versions)
 
-## 👤 Author
+## 👤 Developers
 
 Kushal Deb, Sidhartha Sankar Hazarika, Sahil Fulfagar and 
 Kamaal Ahmed.
