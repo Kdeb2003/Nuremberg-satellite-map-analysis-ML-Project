@@ -179,4 +179,5 @@ They include:
 
 ## 👤 Author
 
-Machine Learning Final Project by **Kushagra Deb** (repository owner: `Kdeb2003`).
+Kushal Deb, Sidhartha Sankar Hazarika, Sahil Fulfagar and 
+Kamaal Ahmed.
