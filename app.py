@@ -8,7 +8,7 @@ import math
 import matplotlib.pyplot as plt
 import numpy as np
 from sklearn.metrics import accuracy_score
-from chatbot import generate_response, build_context
+from chatbot import generate_response, build_context, get_chat_runtime_status
 # -----------------------------
 # PAGE CONFIG
 # -----------------------------
@@ -368,6 +368,14 @@ def normalize_label_value(raw_label):
     return 3
 
 
+def _next_map_key(prefix="map"):
+    counter_key = "_st_folium_counter"
+    if counter_key not in st.session_state:
+        st.session_state[counter_key] = 0
+    st.session_state[counter_key] += 1
+    return f"{prefix}_{st.session_state[counter_key]}"
+
+
 def render_legend():
     st.markdown(
         """
@@ -496,7 +504,13 @@ def render_landcover_map(geojson_payload):
         }
     ).add_to(m)
 
-    st_folium(m, width=700, height=520)
+    st_folium(
+        m,
+        width=700,
+        height=520,
+        key=_next_map_key("landcover"),
+        returned_objects=[],
+    )
 
 
 def render_accuracy_comparison(y_true, y_pred_mlp, y_pred_ridge):
@@ -893,7 +907,13 @@ def render_agreement_map(df_source, col_a, col_b):
         boundary,
         style_function=lambda _: {"color": "#1e40af", "weight": 2.5, "fillOpacity": 0}
     ).add_to(m)
-    st_folium(m, width=700, height=520)
+    st_folium(
+        m,
+        width=700,
+        height=520,
+        key=_next_map_key("agreement"),
+        returned_objects=[],
+    )
 
 
 def render_prediction_difference_map(df_source, col_a, col_b):
@@ -969,7 +989,13 @@ def render_prediction_difference_map(df_source, col_a, col_b):
         boundary,
         style_function=lambda _: {"color": "#1e40af", "weight": 2.5, "fillOpacity": 0}
     ).add_to(m)
-    st_folium(m, width=700, height=520)
+    st_folium(
+        m,
+        width=700,
+        height=520,
+        key=_next_map_key("pred_diff"),
+        returned_objects=[],
+    )
 
 
 def render_model_prediction_comparison_bar(df_source, col_mlp, col_ridge):
@@ -1231,7 +1257,13 @@ def render_change_map(df_year1, df_year2, label_col_year1="label", label_col_yea
         boundary,
         style_function=lambda _: {"color": "#1e40af", "weight": 2.5, "fillOpacity": 0}
     ).add_to(m)
-    st_folium(m, width=900, height=560)
+    st_folium(
+        m,
+        width=900,
+        height=560,
+        key=_next_map_key("change_map"),
+        returned_objects=[],
+    )
 
 
 def render_builtup_growth_metric(df_year1, df_year2, year1, year2, label_col_year1="label", label_col_year2="label"):
@@ -1571,6 +1603,17 @@ else:
 
 st.sidebar.markdown("---")
 st.sidebar.subheader("💬 Ask the Assistant")
+chat_status = get_chat_runtime_status()
+if chat_status.get("ready"):
+    st.sidebar.caption(f"Mode: OpenAI ({chat_status.get('model')})")
+else:
+    st.sidebar.caption("Mode: Fallback (OpenAI not active)")
+    st.sidebar.caption(chat_status.get("message", ""))
+
+last_chat_error = chat_status.get("last_error")
+if last_chat_error:
+    with st.sidebar.expander("Last chat error"):
+        st.code(str(last_chat_error))
 
 # Initialize chat history
 if "chat_history" not in st.session_state:
@@ -1609,6 +1652,137 @@ class_counts = (
     .to_dict()
 )
 
+def _counts_for_chat(df_source, col_name):
+    return (
+        df_source[col_name]
+        .apply(normalize_label_value)
+        .value_counts()
+        .reindex([0, 1, 2, 3], fill_value=0)
+        .astype(int)
+        .to_dict()
+    )
+
+
+def _confusion_for_chat(df_source, true_col, pred_col):
+    classes = [0, 1, 2, 3]
+    y_true_local = df_source[true_col].apply(normalize_label_value)
+    y_pred_local = df_source[pred_col].apply(normalize_label_value)
+    matrix = pd.crosstab(
+        pd.Categorical(y_true_local, categories=classes),
+        pd.Categorical(y_pred_local, categories=classes),
+        dropna=False
+    ).values
+    return matrix.astype(int).tolist()
+
+
+def _transition_for_chat(df_year1, df_year2, label_col_year1, label_col_year2):
+    classes = [0, 1, 2, 3]
+    if "system:index" in df_year1.columns and "system:index" in df_year2.columns:
+        y1 = df_year1[["system:index", label_col_year1]].copy()
+        y2 = df_year2[["system:index", label_col_year2]].copy()
+        y1["system:index"] = y1["system:index"].astype(str)
+        y2["system:index"] = y2["system:index"].astype(str)
+        y1 = y1.rename(columns={label_col_year1: "class_y1"})
+        y2 = y2.rename(columns={label_col_year2: "class_y2"})
+        merged = y1.merge(y2, on="system:index", how="inner")
+        if len(merged) > 0:
+            s1 = merged["class_y1"].apply(normalize_label_value)
+            s2 = merged["class_y2"].apply(normalize_label_value)
+        else:
+            n = min(len(df_year1), len(df_year2))
+            s1 = df_year1[label_col_year1].head(n).apply(normalize_label_value)
+            s2 = df_year2[label_col_year2].head(n).apply(normalize_label_value)
+    else:
+        n = min(len(df_year1), len(df_year2))
+        s1 = df_year1[label_col_year1].head(n).apply(normalize_label_value)
+        s2 = df_year2[label_col_year2].head(n).apply(normalize_label_value)
+
+    tm = pd.crosstab(
+        pd.Categorical(s1, categories=classes),
+        pd.Categorical(s2, categories=classes),
+        dropna=False
+    ).values
+    return tm.astype(int).tolist()
+
+
+chat_metrics = {
+    "view_mode": view_mode,
+    "selected_year": selected_year,
+}
+
+if view_mode == "Single Year":
+    if selected_year == "2020":
+        chat_metrics["actual_counts"] = _counts_for_chat(df_2020, "label")
+    elif selected_year == "2021":
+        chat_metrics["actual_counts"] = _counts_for_chat(df_2021, "label")
+        chat_metrics["mlp_counts"] = _counts_for_chat(df_2021, "mlp_pred")
+        chat_metrics["ridge_counts"] = _counts_for_chat(df_2021, "ridge_pred")
+        yt = df_2021["label"].apply(normalize_label_value)
+        yp_mlp = df_2021["mlp_pred"].apply(normalize_label_value)
+        yp_ridge = df_2021["ridge_pred"].apply(normalize_label_value)
+        chat_metrics["accuracies"] = {
+            "mlp": float((yt == yp_mlp).mean()),
+            "ridge": float((yt == yp_ridge).mean()),
+        }
+        chat_metrics["confusion_matrices"] = {
+            "mlp": _confusion_for_chat(df_2021, "label", "mlp_pred"),
+            "ridge": _confusion_for_chat(df_2021, "label", "ridge_pred"),
+        }
+        chat_metrics["selected_model"] = selected_model
+        if selected_model in ["MLP", "Ridge"]:
+            pred_col = "mlp_pred" if selected_model == "MLP" else "ridge_pred"
+            chat_metrics["selected_model_counts"] = _counts_for_chat(df_2021, pred_col)
+            chat_metrics["selected_model_accuracy"] = chat_metrics["accuracies"][selected_model.lower()]
+    elif selected_year == "2024":
+        chat_metrics["mlp_counts"] = _counts_for_chat(df_2024, "mlp_pred")
+        chat_metrics["ridge_counts"] = _counts_for_chat(df_2024, "ridge_pred")
+        disagreement = (
+            df_2024["mlp_pred"].apply(normalize_label_value)
+            != df_2024["ridge_pred"].apply(normalize_label_value)
+        )
+        chat_metrics["model_disagreement"] = {
+            "count": int(disagreement.sum()),
+            "rate": float(disagreement.mean()),
+        }
+else:
+    model_col_for_multi = "mlp_pred" if selected_model == "MLP" else "ridge_pred"
+    df_year1 = year_to_df[first_year]
+    df_year2 = year_to_df[second_year]
+    label_col_year1 = "label" if first_year in ["2020", "2021"] else model_col_for_multi
+    label_col_year2 = "label" if second_year in ["2020", "2021"] else model_col_for_multi
+    c1 = _counts_for_chat(df_year1, label_col_year1)
+    c2 = _counts_for_chat(df_year2, label_col_year2)
+    net_change = {k: int(c2[k] - c1[k]) for k in [0, 1, 2, 3]}
+    pct_change = {}
+    for k in [0, 1, 2, 3]:
+        base = float(c1[k])
+        pct_change[k] = float(((c2[k] - c1[k]) / base) * 100.0) if base > 0 else 0.0
+
+    transition = _transition_for_chat(df_year1, df_year2, label_col_year1, label_col_year2)
+    builtup_delta = int(c2[1] - c1[1])
+    builtup_pct = float(((c2[1] - c1[1]) / c1[1]) * 100.0) if c1[1] > 0 else 0.0
+    top_change_class = max(net_change, key=lambda k: abs(net_change[k]))
+    chat_metrics["comparison"] = {
+        "first_year": first_year,
+        "second_year": second_year,
+        "selected_model": selected_model,
+        "counts_first": c1,
+        "counts_second": c2,
+        "net_change": net_change,
+        "percentage_change": pct_change,
+        "transition_matrix": transition,
+        "builtup_change": {
+            "delta": builtup_delta,
+            "percent": builtup_pct,
+        },
+        "top_change_class": int(top_change_class),
+        "top_change_value": int(net_change[top_change_class]),
+        "label_columns": {
+            "first": label_col_year1,
+            "second": label_col_year2,
+        },
+    }
+
 if selected_year == "2021" and not compare_both_models:
     try:
         actual_col = "label"
@@ -1620,13 +1794,18 @@ if selected_year == "2021" and not compare_both_models:
         accuracy_value = None
 
 context = build_context(
-    selected_year,
-    selected_model,
-    compare_both_models,
-    accuracy_value
+    selected_year=selected_year,
+    selected_model=selected_model,
+    compare_mode=compare_both_models,
+    accuracy=accuracy_value,
+    view_mode=view_mode,
+    first_year=first_year,
+    second_year=second_year,
+    selected_label_column=selected_label_column,
 )
 context["class_counts"] = class_counts
 context["total_cells"] = len(selected_df)
+context["chat_metrics"] = chat_metrics
 
 if selected_year == "2021" and compare_both_models:
     context["mlp_counts"] = (
