@@ -1,93 +1,182 @@
-# ML_Final_Project
+﻿# 🌍 Nuremberg Satellite Map Analysis (ML Project)
 
+Interactive machine learning project for **land-cover mapping** and **urban change analysis** in Nuremberg using Sentinel-2 based features, multiple classification models, and a Streamlit dashboard with map visualizations.
 
+## ✨ What This Project Does
 
-## Getting started
+- 🛰️ Builds grid-based land-cover datasets from satellite imagery
+- 🧹 Unifies labels (CORINE + WorldCover) into 4 classes
+- 🤖 Trains and compares multiple ML models (MLP, Ridge, Logistic, RF, GB, etc.)
+- 🗺️ Visualizes predictions and temporal changes (2020, 2021, 2024) on interactive maps
+- 📈 Shows confusion matrices, per-class accuracy, transition matrices, and change metrics
+- 💬 Includes an in-dashboard assistant (OpenAI-powered with deterministic fallback mode)
 
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
+## 🧠 Land-Cover Classes
 
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
+Unified labels used in dashboard/training:
 
-## Add your files
+- `0` → Vegetation
+- `1` → Built-up
+- `2` → Water
+- `3` → Other
 
-* [Create](https://docs.gitlab.com/user/project/repository/web_editor/#create-a-file) or [upload](https://docs.gitlab.com/user/project/repository/web_editor/#upload-a-file) files
-* [Add files using the command line](https://docs.gitlab.com/topics/git/add_files/#add-files-to-a-git-repository) or push an existing Git repository with the following command:
+## 🗂️ Repository Structure
 
+```text
+.
+|- app.py                                   # Main Streamlit dashboard
+|- chatbot.py                               # Chat assistant logic (OpenAI + fallback)
+|- requirements.txt
+|- README.md
+|
+|- clean_dataset_200m/                      # Cleaned 200m datasets (CSV)
+|- data/ data2/ data3/                      # Raw/intermediate XLSX datasets
+|- boundary/                                # GeoJSON boundary
+|- nuremberg_boundary/                      # Shapefile boundary used by app
+|
+|- unify_labels.py                          # Label unification (300m workflow)
+|- new_unify_labels_200m.py                 # Label unification (200m workflow)
+|
+|- model_training_v2.py
+|- model_training_v3_for_200m.py
+|- model_training_v4_for_200m.py
+|- model_training_v5_with_gb.py
+|- model_training_v6_for_200m_with_linear_regression.py
+|- model_training_v7_ridge_mlp.py
+|- model_training_v8_log_rand.py
+|- model_training_change.py                 # Learned change model (2020→2021; infer 2024)
+|
+|- predictions_2021.csv
+|- predictions_2024.csv
+|- predictions_change_2021.csv
+|- predictions_change_2024.csv
+|
+'- nuremberg_landcover_dataset*.js          # Earth Engine scripts for dataset creation
 ```
-cd existing_repo
-git remote add origin https://gitos.rrze.fau.de/okaq03ih.utn.de/ml_final_project.git
-git branch -M main
-git push -uf origin main
+
+## ⚙️ Installation
+
+### 1) Create and activate a virtual environment
+
+```bash
+python -m venv .venv
 ```
 
-## Integrate with your tools
+Windows:
 
-* [Set up project integrations](https://gitos.rrze.fau.de/okaq03ih.utn.de/ml_final_project/-/settings/integrations)
+```bash
+.venv\Scripts\activate
+```
 
-## Collaborate with your team
+macOS/Linux:
 
-* [Invite team members and collaborators](https://docs.gitlab.com/user/project/members/)
-* [Create a new merge request](https://docs.gitlab.com/user/project/merge_requests/creating_merge_requests/)
-* [Automatically close issues from merge requests](https://docs.gitlab.com/user/project/issues/managing_issues/#closing-issues-automatically)
-* [Enable merge request approvals](https://docs.gitlab.com/user/project/merge_requests/approvals/)
-* [Set auto-merge](https://docs.gitlab.com/user/project/merge_requests/auto_merge/)
+```bash
+source .venv/bin/activate
+```
 
-## Test and Deploy
+### 2) Install dependencies
 
-Use the built-in continuous integration in GitLab.
+```bash
+pip install -r requirements.txt
+```
 
-* [Get started with GitLab CI/CD](https://docs.gitlab.com/ci/quick_start/)
-* [Analyze your code for known vulnerabilities with Static Application Security Testing (SAST)](https://docs.gitlab.com/user/application_security/sast/)
-* [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/topics/autodevops/requirements/)
-* [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/user/clusters/agent/)
-* [Set up protected environments](https://docs.gitlab.com/ci/environments/protected_environments/)
+## 🔐 Environment Variables (Chat Assistant)
 
-***
+Create a `.env` file in the project root:
 
-# Editing this README
+```env
+OPENAI_API_KEY=your_openai_api_key_here
+OPENAI_MODEL=gpt-4o-mini
+OPENAI_TIMEOUT_SECONDS=10
+```
 
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thanks to [makeareadme.com](https://www.makeareadme.com/) for this template.
+Notes:
+- ✅ `OPENAI_API_KEY` enables OpenAI responses.
+- ✅ If key is missing/invalid, chatbot still works in fallback mode.
+- ❌ Never hardcode API keys in source files.
 
-## Suggestions for a good README
+## 🚀 Run the Dashboard
 
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
+```bash
+streamlit run app.py
+```
 
-## Name
-Choose a self-explaining name for your project.
+Open the local URL shown by Streamlit (usually `http://localhost:8501`).
 
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
+## 🧪 Data + Training Workflow
 
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
+### A) Build/clean datasets
 
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
+- 300m clean labels:
+```bash
+python unify_labels.py
+```
 
-## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
+- 200m clean labels:
+```bash
+python new_unify_labels_200m.py
+```
 
-## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
+### B) Train models and generate prediction files
 
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
+Core files commonly used by the app:
 
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
+```bash
+python model_training_v7_ridge_mlp.py      # creates predictions_2021.csv and predictions_2024.csv
+python model_training_change.py            # creates predictions_change_2021.csv and predictions_change_2024.csv
+```
 
-## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
+Other experimental model scripts are also available (`v2` to `v8`) for comparison.
 
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
+## 📊 Dashboard Features
 
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
+### Single Year View
 
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
+- 2020 actual land-cover map + analytics
+- 2021 actual vs predicted (MLP/Ridge), confusion matrix, error map, per-class accuracy
+- 2024 predicted maps (MLP vs Ridge), disagreement/uncertainty analysis
 
-## License
-For open source projects, say how it is licensed.
+### Multiple Years View
 
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+- Side-by-side composition comparison
+- Net and percentage class change
+- Transition matrix
+- Spatial change map
+- Built-up growth metrics and top change insights
+- Optional learned change-model visualization
+
+### Chat Assistant (Sidebar)
+
+- Answers questions about current view, metrics, distributions, transitions, and errors
+- Uses exact computed values when available in current dashboard context
+- Falls back to deterministic/local logic if OpenAI is unavailable
+
+## 🗺️ Earth Engine Scripts
+
+These scripts generate grid datasets from remote sensing data:
+
+- `nuremberg_landcover_dataset.js`
+- `nuremberg_landcover_dataset_2018_with_corine.js`
+- `nuremberg_landcover_dataset_for_200m_grid.js`
+
+They include:
+- Sentinel-2 feature extraction (`B2, B3, B4, B8, B11`)
+- Indices (`NDVI, NDBI, NDWI`)
+- Grid reduction and export
+
+## 📌 Important Notes
+
+- The app expects specific generated files (`predictions_2021.csv`, `predictions_2024.csv`) to exist.
+- For learned change mode, both change prediction files must exist.
+- Large data artifacts are included in repository; cloning may take time.
+
+## 🛠️ Recommended Next Improvements
+
+- Add pinned dependency versions for reproducibility
+- Add screenshots/GIFs in README
+- Add automated tests for critical data-loading paths
+- Add model performance summary table (all versions)
+
+## 👤 Author
+
+Machine Learning Final Project by **Kushagra Deb** (repository owner: `Kdeb2003`).
