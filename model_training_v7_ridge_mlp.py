@@ -13,9 +13,10 @@ from imblearn.over_sampling import SMOTE
 # 1. LOAD DATA
 # =====================================================
 
-df_2020 = pd.read_excel("nuremberg_grid_dataset_2020_200m.xlsx")
-df_2021 = pd.read_excel("nuremberg_grid_dataset_2021_ESA_200m.xlsx")
-df_2024 = pd.read_excel("nuremberg_2024_features_clean.xlsx")
+df_2020 = pd.read_excel("data3/nuremberg_grid_dataset_2020_200m.xlsx")
+df_2021 = pd.read_excel("data3/nuremberg_grid_dataset_2021_ESA_200m.xlsx")
+df_2024 = pd.read_excel("data3/nuremberg_2024_features_clean.xlsx")
+
 
 df_2020["year"] = 2020
 df_2021["year"] = 2021
@@ -56,16 +57,11 @@ df_2021_clean = fix_labels(df_2021_clean)
 
 def simplify_labels(df):
     def map_class(x):
-        # Unified 4-class mapping aligned with dashboard:
-        # 0=Vegetation, 1=Built-up, 2=Water, 3=Other
-        if x in [10, 20, 30, 40]:
-            return 0
-        elif x == 50:
-            return 1
-        elif x == 80:
-            return 2
-        else:
-            return 3
+        if x in [10, 20, 30]: return 0
+        elif x in [40, 50]: return 1
+        elif x in [60, 70]: return 2
+        elif x in [80, 90]: return 3
+        else: return 4
     df["label"] = df["label"].apply(map_class)
     return df
 

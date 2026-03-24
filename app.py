@@ -4,11 +4,29 @@ import geopandas as gpd
 import folium
 from streamlit_folium import st_folium
 import json
+import html as html_lib
 import math
+from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 from sklearn.metrics import accuracy_score
 from chatbot import generate_response, build_context, get_chat_runtime_status
+
+# Matplotlib global theme so all charts blend with the dashboard background.
+plt.rcParams.update({
+    "figure.facecolor": "none",
+    "axes.facecolor": "none",
+    "savefig.facecolor": "none",
+    "savefig.edgecolor": "none",
+    "savefig.transparent": True,
+    "text.color": "#e6e6f0",
+    "axes.labelcolor": "#dcdcf0",
+    "axes.edgecolor": "#5a5a8a",
+    "xtick.color": "#dcdcf0",
+    "ytick.color": "#dcdcf0",
+    "grid.color": "#5a5a8a",
+    "grid.alpha": 0.35,
+})
 # -----------------------------
 # PAGE CONFIG
 # -----------------------------
@@ -16,6 +34,7 @@ st.set_page_config(
     page_title="Nuremberg Land Cover Dashboard",
     layout="wide"
 )
+
 # -----------------------------
 # DARK GRADIENT THEME (PINK / BLUE)
 # -----------------------------
@@ -28,10 +47,34 @@ st.markdown("""
     color: #e6e6f0;
 }
 
+/* Remove Streamlit default top header strip */
+header[data-testid="stHeader"] {
+    display: none;
+}
+div[data-testid="stToolbar"] {
+    display: none;
+}
+div[data-testid="stDecoration"] {
+    display: none;
+}
+
 /* Sidebar */
 section[data-testid="stSidebar"] {
     background: linear-gradient(180deg, #1a1a2e, #16213e);
-    border-right: 1px solid rgba(255,255,255,0.05);
+    border-right: 1px solid rgba(80, 80, 140, 0.45);
+}
+
+/* Sidebar text visibility */
+section[data-testid="stSidebar"] h1,
+section[data-testid="stSidebar"] h2,
+section[data-testid="stSidebar"] h3,
+section[data-testid="stSidebar"] h4,
+section[data-testid="stSidebar"] p,
+section[data-testid="stSidebar"] label,
+section[data-testid="stSidebar"] span,
+section[data-testid="stSidebar"] div[data-testid="stMarkdownContainer"] {
+    color: #eef1ff !important;
+    opacity: 1 !important;
 }
 
 /* Headers */
@@ -43,14 +86,37 @@ h1, h2, h3, h4 {
 /* Cards / containers */
 div[data-testid="stMetric"],
 div[data-testid="stPlotlyChart"],
-div[data-testid="stDataFrame"],
-div[data-testid="stVerticalBlock"] > div {
+div[data-testid="stImage"],
+div[data-testid="stDataFrame"] {
     background: rgba(20, 20, 40, 0.6);
     border-radius: 14px;
     padding: 12px;
     backdrop-filter: blur(12px);
     box-shadow: 0 0 25px rgba(255, 77, 166, 0.08);
     border: 1px solid rgba(255,255,255,0.05);
+}
+
+/* Animate chart cards */
+@keyframes chartFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(8px) scale(0.99);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+div[data-testid="stPlotlyChart"],
+div[data-testid="stImage"] {
+    animation: chartFadeIn 420ms ease-out;
+}
+
+/* Ensure matplotlib image itself stays transparent */
+div[data-testid="stImage"] img {
+    background: transparent !important;
+    border-radius: 10px;
 }
 
 /* Buttons */
@@ -67,6 +133,115 @@ input, textarea, .stSelectbox, .stMultiSelect {
     background: rgba(255,255,255,0.08) !important;
     color: white !important;
     border-radius: 8px !important;
+}
+
+/* Sidebar chat input: light box with dark readable text */
+section[data-testid="stSidebar"] div[data-testid="stChatInput"] textarea,
+section[data-testid="stSidebar"] div[data-testid="stChatInput"] input {
+    color: #1f2746 !important;
+    -webkit-text-fill-color: #1f2746 !important;
+}
+section[data-testid="stSidebar"] div[data-testid="stChatInput"] textarea::placeholder,
+section[data-testid="stSidebar"] div[data-testid="stChatInput"] input::placeholder {
+    color: #6c7698 !important;
+    opacity: 1 !important;
+}
+
+/* Keep chat input fixed while chat history scrolls below */
+section[data-testid="stSidebar"] div[data-testid="stChatInput"] {
+    position: sticky;
+    top: 0.25rem;
+    z-index: 40;
+    background: linear-gradient(180deg, #1a1a2e, #16213e);
+    padding-top: 0.2rem;
+}
+
+/* Scrollable chat history panel */
+.chat-history-scroll {
+    max-height: 44vh;
+    overflow-y: auto;
+    padding: 8px 6px;
+    border-radius: 12px;
+    border: 1px solid rgba(255,255,255,0.07);
+    background: rgba(10, 12, 35, 0.55);
+    margin-top: 8px;
+}
+.chat-msg {
+    margin: 8px 4px;
+    padding: 10px 12px;
+    border-radius: 12px;
+    line-height: 1.45;
+    color: #eef1ff;
+    white-space: normal;
+    word-break: break-word;
+}
+.chat-msg.user {
+    background: rgba(64, 116, 255, 0.20);
+    border: 1px solid rgba(132, 170, 255, 0.30);
+}
+.chat-msg.bot {
+    background: rgba(29, 31, 63, 0.85);
+    border: 1px solid rgba(255,255,255,0.07);
+}
+
+/* Animated hero header */
+.hero-wrap {
+    position: relative;
+    overflow: hidden;
+    border-radius: 18px;
+    margin-top: -14px;
+    margin-bottom: 18px;
+    padding: 24px 24px 18px 24px;
+    background:
+        radial-gradient(1000px 280px at 10% -30%, rgba(255,77,166,0.24), transparent 56%),
+        radial-gradient(900px 230px at 95% 0%, rgba(77,166,255,0.23), transparent 54%),
+        linear-gradient(135deg, rgba(24,24,60,0.96), rgba(16,18,48,0.93));
+    border: 1px solid rgba(255,255,255,0.11);
+    box-shadow: 0 14px 40px rgba(9, 11, 38, 0.45);
+    animation: heroEnter 520ms ease-out;
+}
+.hero-wrap::before {
+    content: "";
+    position: absolute;
+    inset: -40% -20%;
+    background: conic-gradient(
+        from 90deg,
+        transparent 0deg,
+        rgba(77,166,255,0.18) 70deg,
+        transparent 140deg,
+        rgba(255,77,166,0.15) 220deg,
+        transparent 300deg
+    );
+    filter: blur(28px);
+    animation: heroSpin 14s linear infinite;
+    pointer-events: none;
+}
+.hero-title {
+    position: relative;
+    margin: 0;
+    font-size: clamp(2.1rem, 3.5vw, 3.4rem);
+    line-height: 1.04;
+    letter-spacing: 0.2px;
+    font-weight: 800;
+    background: linear-gradient(90deg, #f8f3ff 0%, #dce8ff 45%, #f7d6ec 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent !important;
+}
+.hero-subtitle {
+    position: relative;
+    margin-top: 10px;
+    color: #d7def8 !important;
+    font-size: 1.12rem;
+    font-weight: 500;
+}
+@keyframes heroEnter {
+    from { opacity: 0; transform: translateY(8px) scale(0.995); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes heroSpin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
 }
 
 /* Metrics */
@@ -98,10 +273,18 @@ p, label, span {
 
 </style>
 """, unsafe_allow_html=True)
-st.title("Mapping Urban Change in Nuremberg")
-st.write("Interactive dashboard for exploring land cover and urban change using machine learning.")
 
-st.sidebar.title("Land Cover Dashboard ")
+st.markdown(
+    """
+    <div class="hero-wrap">
+      <h1 class="hero-title">Mapping Urban Change in Nuremberg</h1>
+      <div class="hero-subtitle">Interactive dashboard for exploring land cover and urban change using machine learning.</div>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+
+st.sidebar.title("Land Cover Dashboard")
 view_mode = st.sidebar.radio(
     "View Mode",
     options=["Single Year", "Multiple Years"],
@@ -118,6 +301,7 @@ selected_model = None
 compare_both_models = False
 first_year = None
 second_year = None
+use_learned_change_model = False
 
 if view_mode == "Single Year" and selected_year == "2021":
     selected_model = st.sidebar.selectbox(
@@ -142,6 +326,11 @@ elif view_mode == "Multiple Years":
             options=["MLP", "Ridge"],
             index=0
         )
+    use_learned_change_model = st.sidebar.checkbox(
+        "Use Learned Change Model",
+        value=False,
+        help="Uses predictions_change_2021.csv and predictions_change_2024.csv generated by model_training_change.py."
+    )
 
 # -----------------------------
 # DATA LOADING
@@ -179,6 +368,31 @@ def load_data():
 
 
 df_2020, df_2021, df_2024 = load_data()
+
+
+@st.cache_data
+def load_change_data():
+    f_2021 = Path("predictions_change_2021.csv")
+    f_2024 = Path("predictions_change_2024.csv")
+    if not (f_2021.exists() and f_2024.exists()):
+        return None, None, False
+
+    df_change_2021 = pd.read_csv(f_2021)
+    df_change_2024 = pd.read_csv(f_2024)
+
+    if "system:index" in df_change_2024.columns:
+        df_2024_geo = pd.read_csv("clean_dataset_200m/2024_clean.csv", usecols=["system:index", ".geo"])
+        df_change_2024 = df_change_2024.merge(
+            df_2024_geo, on="system:index", how="left", suffixes=("", "_clean")
+        )
+        if ".geo_clean" in df_change_2024.columns:
+            df_change_2024[".geo"] = df_change_2024[".geo_clean"].fillna(df_change_2024.get(".geo"))
+            df_change_2024 = df_change_2024.drop(columns=[".geo_clean"])
+
+    return df_change_2021, df_change_2024, True
+
+
+df_change_2021, df_change_2024, has_change_outputs = load_change_data()
 
 year_to_df = {
     "2020": df_2020,
@@ -409,11 +623,15 @@ def render_landcover_pie(df_source, label_column, title):
     counts = normalized.value_counts().reindex([0, 1, 2, 3], fill_value=0)
 
     fig, ax = plt.subplots(figsize=(5.2, 5.2))
+    explode = [0.03 if v > 0 else 0.0 for v in counts.values]
     wedges, _ = ax.pie(
         counts.values,
         labels=None,
         colors=[label_colors[i] for i in counts.index],
-        startangle=90
+        startangle=90,
+        counterclock=False,
+        explode=explode,
+        wedgeprops=dict(width=0.86, edgecolor="#0f0c29", linewidth=1.2)
     )
 
     total = counts.sum()
@@ -462,17 +680,22 @@ def render_landcover_pie(df_source, label_column, title):
             xytext=(x_text, d["y_text"]),
             ha=ha,
             va="center",
-            fontsize=9,
+            fontsize=10,
+            color="#f2f2ff",
             arrowprops=dict(
                 arrowstyle="-",
-                color="#444444",
-                lw=0.9,
+                color="#c7c7e8",
+                lw=1.1,
                 connectionstyle=f"arc3,rad={rad}"
             )
         )
 
+    # Dark center circle so the pie appears as a modern donut chart.
+    center = plt.Circle((0, 0), 0.50, fc="#171733", ec="#4f4f7f", linewidth=1.1)
+    ax.add_artist(center)
+
     fig.subplots_adjust(bottom=0.16)
-    fig.text(0.5, 0.04, title, ha="center", va="center", fontsize=11)
+    fig.text(0.5, 0.04, title, ha="center", va="center", fontsize=11, color="#f2f2ff")
     ax.axis("equal")
     st.pyplot(fig)
     plt.close(fig)
@@ -506,11 +729,128 @@ def render_landcover_map(geojson_payload):
 
     st_folium(
         m,
-        width=700,
         height=520,
+        use_container_width=True,
         key=_next_map_key("landcover"),
         returned_objects=[],
     )
+
+
+@st.cache_data
+def load_change_geojson(df_change, label_column):
+    color_map = {
+        0: "#6b7280",  # no change
+        1: "#dc2626",  # vegetation -> built-up
+        2: "#16a34a",  # built-up -> vegetation
+        3: "#f59e0b",  # other change
+    }
+
+    def parse_geometry(geo_value):
+        if pd.isna(geo_value):
+            return None
+        try:
+            obj = json.loads(geo_value)
+        except Exception:
+            return None
+
+        if isinstance(obj, dict) and obj.get("type") in ["Polygon", "MultiPolygon"]:
+            return {"type": obj["type"], "coordinates": obj["coordinates"]}
+        if isinstance(obj, dict) and obj.get("type") == "Feature" and "geometry" in obj:
+            geom = obj.get("geometry")
+            if isinstance(geom, dict) and geom.get("type") in ["Polygon", "MultiPolygon"]:
+                return {"type": geom["type"], "coordinates": geom["coordinates"]}
+        return None
+
+    def mercator_to_wgs84(x, y):
+        r = 6378137.0
+        lon = (x / r) * (180.0 / math.pi)
+        lat = (2.0 * math.atan(math.exp(y / r)) - math.pi / 2.0) * (180.0 / math.pi)
+        return [lon, lat]
+
+    def maybe_convert_coords(coords):
+        if not coords:
+            return coords
+        sample = coords[0][0] if isinstance(coords[0][0], list) else coords[0]
+        sx, sy = sample[0], sample[1]
+        is_projected = abs(sx) > 180 or abs(sy) > 90
+        if not is_projected:
+            return coords
+        if isinstance(coords[0][0], list):
+            return [[mercator_to_wgs84(x, y) for x, y in ring] for ring in coords]
+        return [mercator_to_wgs84(x, y) for x, y in coords]
+
+    def normalize_geometry_crs(geometry):
+        gtype = geometry.get("type")
+        coords = geometry.get("coordinates")
+        if gtype == "Polygon":
+            return {"type": "Polygon", "coordinates": maybe_convert_coords(coords)}
+        if gtype == "MultiPolygon":
+            converted = []
+            for poly in coords:
+                converted.append(maybe_convert_coords(poly))
+            return {"type": "MultiPolygon", "coordinates": converted}
+        return geometry
+
+    geojson_data = {"type": "FeatureCollection", "features": []}
+    for _, row in df_change.iterrows():
+        geometry = parse_geometry(row.get(".geo"))
+        if geometry is None:
+            continue
+        geometry = normalize_geometry_crs(geometry)
+        try:
+            label = int(row.get(label_column, 0))
+        except (TypeError, ValueError):
+            label = 0
+        label = label if label in [0, 1, 2, 3] else 0
+        geojson_data["features"].append({
+            "type": "Feature",
+            "geometry": geometry,
+            "properties": {
+                "label": label,
+                "color": color_map[label],
+            },
+        })
+    return geojson_data
+
+
+def render_change_model_legend():
+    st.markdown(
+        """
+        <div style="margin-top: 8px; margin-bottom: 8px;">
+          <strong>Change Legend:</strong>
+          <span style="margin-left: 10px;"><span style="display:inline-block;width:12px;height:12px;background:#6b7280;border:1px solid #444;"></span> No change</span>
+          <span style="margin-left: 10px;"><span style="display:inline-block;width:12px;height:12px;background:#dc2626;border:1px solid #444;"></span> Vegetation → Built-up</span>
+          <span style="margin-left: 10px;"><span style="display:inline-block;width:12px;height:12px;background:#16a34a;border:1px solid #444;"></span> Built-up → Vegetation</span>
+          <span style="margin-left: 10px;"><span style="display:inline-block;width:12px;height:12px;background:#f59e0b;border:1px solid #444;"></span> Other change</span>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_change_class_distribution(df_source, label_col, title):
+    names = {
+        0: "No change",
+        1: "Veg→Built",
+        2: "Built→Veg",
+        3: "Other",
+    }
+    colors = ["#6b7280", "#dc2626", "#16a34a", "#f59e0b"]
+    counts = (
+        pd.to_numeric(df_source[label_col], errors="coerce")
+        .fillna(0)
+        .astype(int)
+        .value_counts()
+        .reindex([0, 1, 2, 3], fill_value=0)
+    )
+    fig, ax = plt.subplots(figsize=(7, 4))
+    bars = ax.bar([names[i] for i in [0, 1, 2, 3]], counts.values, color=colors, width=0.6)
+    ax.set_title(title)
+    ax.set_ylabel("Grid Cell Count")
+    for b, c in zip(bars, counts.values):
+        ax.text(b.get_x() + b.get_width() / 2, c, f"{int(c)}", ha="center", va="bottom", fontsize=9)
+    st.pyplot(fig)
+    plt.close(fig)
 
 
 def render_accuracy_comparison(y_true, y_pred_mlp, y_pred_ridge):
@@ -909,8 +1249,8 @@ def render_agreement_map(df_source, col_a, col_b):
     ).add_to(m)
     st_folium(
         m,
-        width=700,
         height=520,
+        use_container_width=True,
         key=_next_map_key("agreement"),
         returned_objects=[],
     )
@@ -991,8 +1331,8 @@ def render_prediction_difference_map(df_source, col_a, col_b):
     ).add_to(m)
     st_folium(
         m,
-        width=700,
         height=520,
+        use_container_width=True,
         key=_next_map_key("pred_diff"),
         returned_objects=[],
     )
@@ -1259,8 +1599,8 @@ def render_change_map(df_year1, df_year2, label_col_year1="label", label_col_yea
     ).add_to(m)
     st_folium(
         m,
-        width=900,
         height=560,
+        use_container_width=True,
         key=_next_map_key("change_map"),
         returned_objects=[],
     )
@@ -1597,11 +1937,65 @@ else:
     st.markdown("### Insights")
     render_top_change_insights(df_year1, df_year2, first_year, second_year, label_col_year1, label_col_year2)
 
+    if use_learned_change_model:
+        st.markdown("### Learned Change Model (2020 → 2021 Trained)")
+        if not has_change_outputs:
+            st.warning(
+                "Change model outputs not found. Run `python model_training_change.py` to generate "
+                "`predictions_change_2021.csv` and `predictions_change_2024.csv`."
+            )
+        else:
+            pred_col = "mlp_change_pred" if selected_model == "MLP" else "ridge_change_pred"
+
+            show_2021_change_eval = years_set == {"2020", "2021"}
+            show_2024_change_pred = "2024" in years_set
+
+            if show_2021_change_eval and pred_col in df_change_2021.columns and "change_label_true" in df_change_2021.columns:
+                y_true_change = pd.to_numeric(df_change_2021["change_label_true"], errors="coerce").fillna(0).astype(int)
+                y_pred_change = pd.to_numeric(df_change_2021[pred_col], errors="coerce").fillna(0).astype(int)
+                acc_change = accuracy_score(y_true_change, y_pred_change)
+
+                c1, c2 = st.columns(2)
+                with c1:
+                    st.metric(f"2021 Change Accuracy ({selected_model})", f"{acc_change*100:.2f}%")
+                with c2:
+                    binary_true = (y_true_change != 0).astype(int)
+                    binary_pred = (y_pred_change != 0).astype(int)
+                    acc_binary = accuracy_score(binary_true, binary_pred)
+                    st.metric(f"2021 Binary Change Accuracy ({selected_model})", f"{acc_binary*100:.2f}%")
+
+                m1, m2 = st.columns(2)
+                with m1:
+                    st.subheader(f"2021 True Change Labels")
+                    geo_true_change = load_change_geojson(df_change_2021, "change_label_true")
+                    render_landcover_map(geo_true_change)
+                    render_change_model_legend()
+                with m2:
+                    st.subheader(f"2021 Predicted Change ({selected_model})")
+                    geo_pred_change = load_change_geojson(df_change_2021, pred_col)
+                    render_landcover_map(geo_pred_change)
+                    render_change_model_legend()
+
+                st.markdown("#### 2021 Change Confusion Matrix")
+                render_confusion_matrix(y_true_change, y_pred_change, f"Change Confusion Matrix - {selected_model}")
+
+                d1, d2 = st.columns(2)
+                with d1:
+                    render_change_class_distribution(df_change_2021, "change_label_true", "2021 True Change Distribution")
+                with d2:
+                    render_change_class_distribution(df_change_2021, pred_col, f"2021 Predicted Change Distribution ({selected_model})")
+
+            if show_2024_change_pred and pred_col in df_change_2024.columns:
+                st.markdown("#### 2024 Predicted Change")
+                geo_pred_change_2024 = load_change_geojson(df_change_2024, pred_col)
+                render_landcover_map(geo_pred_change_2024)
+                render_change_model_legend()
+                render_change_class_distribution(df_change_2024, pred_col, f"2024 Predicted Change Distribution ({selected_model})")
+
 # =====================================================
 # CHATBOT SECTION (ALWAYS VISIBLE)
 # =====================================================
 
-st.sidebar.markdown("---")
 st.sidebar.subheader("💬 Ask the Assistant")
 chat_status = get_chat_runtime_status()
 if chat_status.get("ready"):
@@ -1619,18 +2013,7 @@ if last_chat_error:
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
 
-# 🟣 QUICK ACTION BUTTONS (ADD HERE)
-if st.sidebar.button("Explain this page"):
-    user_input = "Explain what I am seeing on this page"
-
-elif st.sidebar.button("What changed?"):
-    user_input = "What are the main land cover changes?"
-
-elif st.sidebar.button("Is this reliable?"):
-    user_input = "Can we trust these predictions?"
-
-else:
-    user_input = st.sidebar.chat_input("Ask something...")
+user_input = st.sidebar.chat_input("Ask something...")
 
 # Build context dynamically
 accuracy_value = None
@@ -1833,9 +2216,18 @@ if user_input:
     st.session_state.chat_history.append(("You", user_input))
     st.session_state.chat_history.append(("Bot", response))
 
-# Display chat history
+# Display chat history in a dedicated scrollable panel.
+chat_rows = []
 for sender, message in st.session_state.chat_history:
-    if sender == "You":
-        st.sidebar.markdown(f"**🧑 You:** {message}")
-    else:
-        st.sidebar.markdown(f"**🤖 Bot:** {message}")
+    role_class = "user" if sender == "You" else "bot"
+    role_label = "🧑 You" if sender == "You" else "🤖 Bot"
+    safe_message = html_lib.escape(str(message)).replace("\n", "<br>")
+    chat_rows.append(
+        f'<div class="chat-msg {role_class}"><strong>{role_label}:</strong> {safe_message}</div>'
+    )
+
+if chat_rows:
+    st.sidebar.markdown(
+        '<div class="chat-history-scroll">' + "".join(chat_rows) + "</div>",
+        unsafe_allow_html=True,
+    )
